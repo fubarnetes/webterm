@@ -21,7 +21,7 @@
 	<body>
 		<div id="terminal"></div>
 		<script>
-			Terminal.applyAddon(attach);
+			Terminal.applyAddon(terminado);
 			Terminal.applyAddon(fit);
 			Terminal.applyAddon(search);
 
@@ -31,7 +31,7 @@
 			var sock = new WebSocket(socketURL);
 
 			sock.addEventListener('open', function() {
-				term.attach(sock);
+				term.terminadoAttach(sock);
 				term.fit();
 			});
 
