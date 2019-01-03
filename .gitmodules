@@ -1,0 +1,3 @@
+[submodule "vendor/stund"]
+	path = vendor/stund
+	url = https://github.com/fabianfreyer/stund.git

@@ -1,0 +1,42 @@
+<!doctype html>
+
+<html>
+	<head>
+		<link rel="stylesheet" href="static/xterm/dist/xterm.css" />
+		<script src="static/xterm/dist/xterm.js"></script>
+		<script src="static/xterm/dist/addons/attach/attach.js"></script>
+		<script src="static/xterm/dist/addons/terminado/terminado.js"></script>
+		<script src="static/xterm/dist/addons/fit/fit.js"></script>
+		<script src="static/xterm/dist/addons/search/search.js"></script>
+<style>
+	body {
+		margin: 0;
+	}
+	html, body, #terminal {
+		width: 100%;
+		height: 100%;
+	}
+</style>
+	</head>
+	<body>
+		<div id="terminal"></div>
+		<script>
+			Terminal.applyAddon(attach);
+			Terminal.applyAddon(fit);
+			Terminal.applyAddon(search);
+
+			var term = new Terminal();
+			var protocol = (location.protocol === 'https:') ? 'wss://' : 'ws://';
+			var socketURL = protocol + location.hostname + ((location.port) ? (':' + location.port) : '') + "/websocket";
+			var sock = new WebSocket(socketURL);
+
+			sock.addEventListener('open', function() {
+				term.attach(sock);
+				term.fit();
+			});
+
+			term.open(document.getElementById('terminal'));
+			window.onresize = function() {term.fit();};
+		</script>
+	</body>
+</html>

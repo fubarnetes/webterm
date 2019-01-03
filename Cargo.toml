@@ -1,0 +1,22 @@
+[package]
+name = "webterm"
+version = "0.1.0"
+authors = ["fabian.freyer@physik.tu-berlin.de"]
+edition = "2018"
+
+[dependencies]
+actix= "0.7.9"
+actix-web= "0.7.17"
+libc = "0.2.46"
+log = "0.4.6"
+pretty_env_logger = "0.3.0"
+serde = "1.0.84"
+serde_json = "1.0.34"
+tokio = "0.1.13"
+tokio-pty-process = "*"
+tokio-io= "0.1.10"
+tokio-codec= "0.1.1"
+futures = "0.1.25"
+
+[patch.crates-io]
+tokio-pty-process = {path = "vendor/stund/tokio-pty-process"}
