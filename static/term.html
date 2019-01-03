@@ -25,7 +25,7 @@ SPDX-License-Identifier: BSD-3-Clause
 	<body>
 		<div id="terminal"></div>
 		<script>
-			Terminal.applyAddon(attach);
+			Terminal.applyAddon(terminado);
 			Terminal.applyAddon(fit);
 			Terminal.applyAddon(search);
 
@@ -35,7 +35,7 @@ SPDX-License-Identifier: BSD-3-Clause
 			var sock = new WebSocket(socketURL);
 
 			sock.addEventListener('open', function() {
-				term.attach(sock);
+				term.terminadoAttach(sock);
 				term.fit();
 			});
 

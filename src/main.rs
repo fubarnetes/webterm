@@ -26,10 +26,15 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
+#![feature(try_from)]
 
 extern crate actix;
 extern crate actix_web;
 extern crate futures;
+extern crate libc;
+extern crate serde;
+extern crate serde_json;
+extern crate tokio;
 extern crate tokio_codec;
 extern crate tokio_io;
 extern crate tokio_pty_process;
@@ -38,26 +43,29 @@ extern crate log;
 extern crate pretty_env_logger;
 
 use actix::*;
-use actix_web::{Binary, fs::NamedFile, fs::StaticFiles, server, ws, App, HttpRequest, Result};
+use actix_web::{fs::NamedFile, fs::StaticFiles, server, ws, App, Binary, HttpRequest, Result};
 
-use futures::future::Future;
+use futures::prelude::*;
 
-use std::process::Command;
-use std::time::{Instant, Duration};
+use libc::c_ushort;
+
 use std::io::Write;
+use std::process::Command;
+use std::time::{Duration, Instant};
 
 use tokio_codec::{BytesCodec, Decoder, FramedRead};
-use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_io::io::WriteHalf;
-use tokio_pty_process::{AsyncPtyMaster, Child, CommandExt};
+use tokio_pty_process::{AsyncPtyMaster, AsyncPtyMasterWriteHalf, Child, CommandExt, PtyMaster};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 type BytesMut = <BytesCodec as Decoder>::Item;
 
-#[derive(Debug)]
-struct IO(BytesMut);
+mod terminado;
+use crate::terminado::TerminadoMessage;
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct IO(BytesMut);
 
 impl Message for IO {
     type Result = ();
@@ -83,7 +91,12 @@ impl From<Binary> for IO {
 
 impl From<String> for IO {
     fn from(s: String) -> Self {
+        Self(s.into())
+    }
+}
 
+impl From<&str> for IO {
+    fn from(s: &str) -> Self {
         Self(s.into())
     }
 }
@@ -126,9 +139,30 @@ impl Handler<IO> for Ws {
     }
 }
 
+impl Handler<TerminadoMessage> for Ws {
+    type Result = ();
+
+    fn handle(&mut self, msg: TerminadoMessage, ctx: &mut <Self as Actor>::Context) {
+        trace!("Ws <- Cons : {:?}", msg);
+        match msg {
+            TerminadoMessage::Stdout(_) => {
+                let json = serde_json::to_string(&msg);
+
+                if let Ok(json) = json {
+                    ctx.text(json);
+                }
+            }
+            _ => error!(r#"Invalid TerminadoMessage to Websocket: only "stdout" supported"#),
+        }
+    }
+}
+
 impl Ws {
     pub fn new() -> Self {
-        Self { hb: Instant::now(), cons: None }
+        Self {
+            hb: Instant::now(),
+            cons: None,
+        }
     }
 
     fn hb(&self, ctx: &mut <Self as Actor>::Context) {
@@ -156,37 +190,49 @@ impl StreamHandler<ws::Message, ws::ProtocolError> for Ws {
                 error!("Console died, closing websocket.");
                 ctx.stop();
                 return;
-            },
+            }
         };
 
         match msg {
             ws::Message::Ping(msg) => {
                 self.hb = Instant::now();
                 ctx.pong(&msg);
-            },
+            }
             ws::Message::Pong(_) => self.hb = Instant::now(),
-            ws::Message::Text(t) => cons.do_send(t.into()),
-            ws::Message::Binary(b) => cons.do_send(b.into()),
+            ws::Message::Text(t) => {
+                // Attempt to parse the message as JSON.
+                if let Ok(tmsg) = TerminadoMessage::from_json(&t) {
+                    cons.do_send(tmsg);
+                } else {
+                    // Otherwise, it's just byte data.
+                    cons.do_send(IO::from(t));
+                }
+            }
+            ws::Message::Binary(b) => cons.do_send(IO::from(b)),
             ws::Message::Close(_) => ctx.stop(),
         };
     }
 }
 
 struct Cons {
-    pty_write: Option<WriteHalf<AsyncPtyMaster>>,
+    pty_write: Option<AsyncPtyMasterWriteHalf>,
     child: Option<Child>,
     ws: Addr<Ws>,
 }
 
 impl Cons {
     pub fn new(ws: Addr<Ws>) -> Self {
-        Self { pty_write: None, child: None, ws }
+        Self {
+            pty_write: None,
+            child: None,
+            ws,
+        }
     }
 }
 
 impl StreamHandler<<BytesCodec as Decoder>::Item, <BytesCodec as Decoder>::Error> for Cons {
     fn handle(&mut self, msg: <BytesCodec as Decoder>::Item, _ctx: &mut Self::Context) {
-        self.ws.do_send(IO(msg.into()));
+        self.ws.do_send(TerminadoMessage::Stdout(IO(msg)));
     }
 }
 
@@ -270,6 +316,52 @@ impl Handler<IO> for Cons {
     }
 }
 
+struct Resize<T: PtyMaster> {
+    pty: T,
+    rows: c_ushort,
+    cols: c_ushort,
+}
+
+impl<T: PtyMaster> Future for Resize<T> {
+    type Item = ();
+    type Error = std::io::Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        self.pty.resize(self.rows, self.cols)
+    }
+}
+
+impl Handler<TerminadoMessage> for Cons {
+    type Result = ();
+
+    fn handle(&mut self, msg: TerminadoMessage, ctx: &mut <Self as Actor>::Context) {
+        let pty = match self.pty_write {
+            Some(ref mut p) => p,
+            None => {
+                error!("Write half of PTY died, stopping Cons.");
+                ctx.stop();
+                return;
+            }
+        };
+
+        trace!("Ws -> Cons : {:?}", msg);
+        match msg {
+            TerminadoMessage::Stdin(io) => {
+                pty.write(io.as_ref());
+            }
+            TerminadoMessage::Resize { cols, rows } => {
+                info!("Resize: cols = {}, rows = {}", cols, rows);
+                Resize { pty, cols, rows }.wait().map_err(|e| {
+                    error!("Resize failed: {}", e);
+                });
+            }
+            TerminadoMessage::Stdout(_) => {
+                error!("Invalid Terminado Message: Stdin cannot go to PTY")
+            }
+        };
+    }
+}
+
 fn main() {
     pretty_env_logger::init();
 
@@ -281,9 +373,7 @@ fn main() {
                     .unwrap()
                     .show_files_listing(),
             )
-            .resource("/websocket", |r| {
-                r.f(|req| ws::start(req, Ws::new()))
-            })
+            .resource("/websocket", |r| r.f(|req| ws::start(req, Ws::new())))
             .resource("/", |r| r.f(index))
     })
     .bind("127.0.0.1:8080")
