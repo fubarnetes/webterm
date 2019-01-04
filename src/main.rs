@@ -74,7 +74,9 @@ impl From<&str> for IO {
 }
 
 struct Ws {
+    req: HttpRequest,
     cons: Option<Addr<Cons>>,
+    cmd_builder: fn(&HttpRequest) -> std::process::Command,
     hb: Instant,
 }
 
@@ -86,7 +88,8 @@ impl Actor for Ws {
         self.hb(ctx);
 
         // Start PTY
-        self.cons = Some(Cons::new(ctx.address()).start());
+        self.cons =
+            Some(Cons::new(ctx.address(), self.cmd_builder.clone(), &self.req).start());
 
         trace!("Started WebSocket");
     }
@@ -130,9 +133,11 @@ impl Handler<TerminadoMessage> for Ws {
 }
 
 impl Ws {
-    pub fn new() -> Self {
+    pub fn new(cmd_builder: fn(&HttpRequest) -> std::process::Command, req: &HttpRequest) -> Self {
         Self {
+            req: req.to_owned(),
             hb: Instant::now(),
+            cmd_builder,
             cons: None,
         }
     }
@@ -187,14 +192,22 @@ impl StreamHandler<ws::Message, ws::ProtocolError> for Ws {
 }
 
 struct Cons {
+    cmd_builder: fn(&HttpRequest) -> std::process::Command,
+    req: HttpRequest,
     pty_write: Option<AsyncPtyMasterWriteHalf>,
     child: Option<Child>,
     ws: Addr<Ws>,
 }
 
 impl Cons {
-    pub fn new(ws: Addr<Ws>) -> Self {
+    pub fn new(
+        ws: Addr<Ws>,
+        cmd_builder: fn(&HttpRequest) -> std::process::Command,
+        req: &HttpRequest,
+    ) -> Self {
         Self {
+            cmd_builder,
+            req: req.clone(),
             pty_write: None,
             child: None,
             ws,
@@ -221,8 +234,8 @@ impl Actor for Cons {
             }
             Ok(pty) => pty,
         };
-
-        let child = match Command::new("/bin/sh").spawn_pty_async(&pty) {
+        let cmd_builder = self.cmd_builder;
+        let child = match cmd_builder(&self.req).spawn_pty_async(&pty) {
             Err(e) => {
                 error!("Unable to spawn child: {:?}", e);
                 ctx.stop();
@@ -334,10 +347,8 @@ impl Handler<TerminadoMessage> for Cons {
     }
 }
 
-fn main() {
-    pretty_env_logger::init();
-
-    server::new(|| {
+fn run(addr: &str, cmd_builder: fn(&HttpRequest) -> std::process::Command) {
+    server::new(move || {
         App::new()
             .handler(
                 "/static",
@@ -345,10 +356,21 @@ fn main() {
                     .unwrap()
                     .show_files_listing(),
             )
-            .resource("/websocket", |r| r.f(|req| ws::start(req, Ws::new())))
+            .resource("/websocket", move |r| {
+                r.f(move |req| ws::start(req, Ws::new(cmd_builder, req)))
+            })
             .resource("/", |r| r.f(index))
     })
-    .bind("127.0.0.1:8080")
+    .bind(addr)
     .unwrap()
     .run();
+}
+
+fn main() {
+    pretty_env_logger::init();
+    run("127.0.0.1:8080", |req| {
+        let mut builder = std::process::Command::new("/bin/sh");
+        builder.env("URL", req.uri().to_string());
+        builder
+    });
 }
