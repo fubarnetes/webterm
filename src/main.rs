@@ -73,6 +73,12 @@ impl From<&str> for IO {
     }
 }
 
+struct ChildDied();
+
+impl Message for ChildDied {
+    type Result = ();
+}
+
 struct Ws {
     req: HttpRequest,
     cons: Option<Addr<Cons>>,
@@ -111,6 +117,16 @@ impl Handler<IO> for Ws {
     fn handle(&mut self, msg: IO, ctx: &mut <Self as Actor>::Context) {
         trace!("Ws <- Cons : {:?}", msg);
         ctx.binary(msg);
+    }
+}
+
+impl Handler<ChildDied> for Ws {
+    type Result = ();
+
+    fn handle(&mut self, msg: ChildDied, ctx: &mut <Self as Actor>::Context) {
+        trace!("Ws got ChildDied Message");
+        ctx.close(None);
+        ctx.stop();
     }
 }
 
@@ -274,6 +290,7 @@ impl Actor for Cons {
             Err(e) => error!("Could not kill child with PID {}: {}", child.id(), e),
         };
 
+        self.ws.do_send(ChildDied());
         Running::Stop
     }
 

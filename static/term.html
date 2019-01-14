@@ -32,7 +32,14 @@
 
 			sock.addEventListener('open', function() {
 				term.terminadoAttach(sock);
+				term.setOption('bellStyle', 'sound');
 				term.fit();
+			});
+
+			sock.addEventListener('close', function() {
+				term.writeln("");
+				term.writeln("Connection closed.");
+				term.terminadoDetach(sock);
 			});
 
 			term.open(document.getElementById('terminal'));
