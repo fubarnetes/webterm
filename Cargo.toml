@@ -3,6 +3,7 @@ name = "webterm"
 version = "0.1.0"
 authors = ["fabian.freyer@physik.tu-berlin.de"]
 edition = "2018"
+license = "BSD-3-Clause"
 
 [dependencies]
 actix= "0.7.9"
