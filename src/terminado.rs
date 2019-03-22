@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_serialize_stdout() {
-        let res = TerminadoMessage::stdout(IO::from("hello world"));
+        let res = TerminadoMessage::Stdout(IO::from("hello world"));
 
         assert_eq!(
             serde_json::to_string(&res).unwrap(),
@@ -185,6 +185,6 @@ mod tests {
 
         let value = TerminadoMessage::from_json(json).expect("Could not parse TerminadoMessage");
 
-        assert_eq!(value, TerminadoMessage::stdout("hello world".into()));
+        assert_eq!(value, TerminadoMessage::Stdout("hello world".into()));
     }
 }
