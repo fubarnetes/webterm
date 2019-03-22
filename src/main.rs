@@ -100,12 +100,12 @@ impl From<&str> for IO {
     }
 }
 
-struct Ws {
-    cons: Option<Addr<Cons>>,
+struct Websocket {
+    cons: Option<Addr<Terminal>>,
     hb: Instant,
 }
 
-impl Actor for Ws {
+impl Actor for Websocket {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
@@ -113,7 +113,7 @@ impl Actor for Ws {
         self.hb(ctx);
 
         // Start PTY
-        self.cons = Some(Cons::new(ctx.address()).start());
+        self.cons = Some(Terminal::new(ctx.address()).start());
 
         trace!("Started WebSocket");
     }
@@ -129,20 +129,20 @@ impl Actor for Ws {
     }
 }
 
-impl Handler<IO> for Ws {
+impl Handler<IO> for Websocket {
     type Result = ();
 
     fn handle(&mut self, msg: IO, ctx: &mut <Self as Actor>::Context) {
-        trace!("Ws <- Cons : {:?}", msg);
+        trace!("Websocket <- Terminal : {:?}", msg);
         ctx.binary(msg);
     }
 }
 
-impl Handler<TerminadoMessage> for Ws {
+impl Handler<TerminadoMessage> for Websocket {
     type Result = ();
 
     fn handle(&mut self, msg: TerminadoMessage, ctx: &mut <Self as Actor>::Context) {
-        trace!("Ws <- Cons : {:?}", msg);
+        trace!("Websocket <- Terminal : {:?}", msg);
         match msg {
             TerminadoMessage::Stdout(_) => {
                 let json = serde_json::to_string(&msg);
@@ -156,7 +156,7 @@ impl Handler<TerminadoMessage> for Ws {
     }
 }
 
-impl Ws {
+impl Websocket {
     pub fn new() -> Self {
         Self {
             hb: Instant::now(),
@@ -181,12 +181,12 @@ fn index(_req: &HttpRequest) -> Result<NamedFile> {
     Ok(NamedFile::open("static/term.html")?)
 }
 
-impl StreamHandler<ws::Message, ws::ProtocolError> for Ws {
+impl StreamHandler<ws::Message, ws::ProtocolError> for Websocket {
     fn handle(&mut self, msg: ws::Message, ctx: &mut Self::Context) {
-        let cons: &mut Addr<Cons> = match self.cons {
+        let cons: &mut Addr<Terminal> = match self.cons {
             Some(ref mut c) => c,
             None => {
-                error!("Console died, closing websocket.");
+                error!("Terminalole died, closing websocket.");
                 ctx.stop();
                 return;
             }
@@ -213,14 +213,14 @@ impl StreamHandler<ws::Message, ws::ProtocolError> for Ws {
     }
 }
 
-struct Cons {
+struct Terminal {
     pty_write: Option<AsyncPtyMasterWriteHalf>,
     child: Option<Child>,
-    ws: Addr<Ws>,
+    ws: Addr<Websocket>,
 }
 
-impl Cons {
-    pub fn new(ws: Addr<Ws>) -> Self {
+impl Terminal {
+    pub fn new(ws: Addr<Websocket>) -> Self {
         Self {
             pty_write: None,
             child: None,
@@ -229,17 +229,17 @@ impl Cons {
     }
 }
 
-impl StreamHandler<<BytesCodec as Decoder>::Item, <BytesCodec as Decoder>::Error> for Cons {
+impl StreamHandler<<BytesCodec as Decoder>::Item, <BytesCodec as Decoder>::Error> for Terminal {
     fn handle(&mut self, msg: <BytesCodec as Decoder>::Item, _ctx: &mut Self::Context) {
         self.ws.do_send(TerminadoMessage::Stdout(IO(msg)));
     }
 }
 
-impl Actor for Cons {
+impl Actor for Terminal {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Started Cons");
+        info!("Started Terminal");
         let pty = match AsyncPtyMaster::open() {
             Err(e) => {
                 error!("Unable to open PTY: {:?}", e);
@@ -269,7 +269,7 @@ impl Actor for Cons {
     }
 
     fn stopping(&mut self, _ctx: &mut Self::Context) -> Running {
-        info!("Stopping Cons");
+        info!("Stopping Terminal");
 
         let child = self.child.take();
 
@@ -292,18 +292,18 @@ impl Actor for Cons {
     }
 
     fn stopped(&mut self, _ctx: &mut Self::Context) {
-        info!("Stopped Cons");
+        info!("Stopped Terminal");
     }
 }
 
-impl Handler<IO> for Cons {
+impl Handler<IO> for Terminal {
     type Result = ();
 
     fn handle(&mut self, msg: IO, ctx: &mut <Self as Actor>::Context) {
         let pty = match self.pty_write {
             Some(ref mut p) => p,
             None => {
-                error!("Write half of PTY died, stopping Cons.");
+                error!("Write half of PTY died, stopping Terminal.");
                 ctx.stop();
                 return;
             }
@@ -314,7 +314,7 @@ impl Handler<IO> for Cons {
             ctx.stop();
         }
 
-        trace!("Ws -> Cons : {:?}", msg);
+        trace!("Websocket -> Terminal : {:?}", msg);
     }
 }
 
@@ -333,20 +333,20 @@ impl<T: PtyMaster> Future for Resize<T> {
     }
 }
 
-impl Handler<TerminadoMessage> for Cons {
+impl Handler<TerminadoMessage> for Terminal {
     type Result = ();
 
     fn handle(&mut self, msg: TerminadoMessage, ctx: &mut <Self as Actor>::Context) {
         let pty = match self.pty_write {
             Some(ref mut p) => p,
             None => {
-                error!("Write half of PTY died, stopping Cons.");
+                error!("Write half of PTY died, stopping Terminal.");
                 ctx.stop();
                 return;
             }
         };
 
-        trace!("Ws -> Cons : {:?}", msg);
+        trace!("Websocket -> Terminal : {:?}", msg);
         match msg {
             TerminadoMessage::Stdin(io) => {
                 if let Err(e) = pty.write(io.as_ref()) {
@@ -379,7 +379,7 @@ fn main() {
                     .unwrap()
                     .show_files_listing(),
             )
-            .resource("/websocket", |r| r.f(|req| ws::start(req, Ws::new())))
+            .resource("/websocket", |r| r.f(|req| ws::start(req, Websocket::new())))
             .resource("/", |r| r.f(index))
     })
     .bind("127.0.0.1:8080")
