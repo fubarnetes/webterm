@@ -309,7 +309,10 @@ impl Handler<IO> for Cons {
             }
         };
 
-        pty.write(msg.as_ref());
+        if let Err(e) = pty.write(msg.as_ref()) {
+            error!("Could not write to PTY: {}", e);
+            ctx.stop();
+        }
 
         trace!("Ws -> Cons : {:?}", msg);
     }
@@ -346,13 +349,17 @@ impl Handler<TerminadoMessage> for Cons {
         trace!("Ws -> Cons : {:?}", msg);
         match msg {
             TerminadoMessage::Stdin(io) => {
-                pty.write(io.as_ref());
+                if let Err(e) = pty.write(io.as_ref()) {
+                    error!("Could not write to PTY: {}", e);
+                    ctx.stop();
+                }
             }
             TerminadoMessage::Resize { cols, rows } => {
                 info!("Resize: cols = {}, rows = {}", cols, rows);
-                Resize { pty, cols, rows }.wait().map_err(|e| {
+                if let Err(e) = (Resize { pty, cols, rows }).wait() {
                     error!("Resize failed: {}", e);
-                });
+                    ctx.stop();
+                }
             }
             TerminadoMessage::Stdout(_) => {
                 error!("Invalid Terminado Message: Stdin cannot go to PTY")
