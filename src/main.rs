@@ -190,7 +190,8 @@ impl Terminal {
 
 impl StreamHandler<<BytesCodec as Decoder>::Item, <BytesCodec as Decoder>::Error> for Terminal {
     fn handle(&mut self, msg: <BytesCodec as Decoder>::Item, _ctx: &mut Self::Context) {
-        self.ws.do_send(event::TerminadoMessage::Stdout(event::IO(msg)));
+        self.ws
+            .do_send(event::TerminadoMessage::Stdout(event::IO(msg)));
     }
 }
 
@@ -323,7 +324,9 @@ fn main() {
                     .unwrap()
                     .show_files_listing(),
             )
-            .resource("/websocket", |r| r.f(|req| ws::start(req, Websocket::new())))
+            .resource("/websocket", |r| {
+                r.f(|req| ws::start(req, Websocket::new()))
+            })
             .resource("/", |r| r.f(index))
     })
     .bind("127.0.0.1:8080")
