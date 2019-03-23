@@ -8,7 +8,7 @@ use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 use serde_json;
 
-use crate::IO;
+use crate::event::IO;
 
 impl Message for TerminadoMessage {
     type Result = ();

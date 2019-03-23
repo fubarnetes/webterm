@@ -42,63 +42,22 @@ extern crate log;
 extern crate pretty_env_logger;
 
 use actix::*;
-use actix_web::{fs::NamedFile, fs::StaticFiles, server, ws, App, Binary, HttpRequest, Result};
+use actix_web::{fs::NamedFile, fs::StaticFiles, server, ws, App, HttpRequest, Result};
 
 use futures::prelude::*;
-
-use libc::c_ushort;
 
 use std::io::Write;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
 use tokio_codec::{BytesCodec, Decoder, FramedRead};
-use tokio_pty_process::{AsyncPtyMaster, AsyncPtyMasterWriteHalf, Child, CommandExt, PtyMaster};
+use tokio_pty_process::{AsyncPtyMaster, AsyncPtyMasterWriteHalf, Child, CommandExt};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
-type BytesMut = <BytesCodec as Decoder>::Item;
-
+mod event;
 mod terminado;
-use crate::terminado::TerminadoMessage;
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct IO(BytesMut);
-
-impl Message for IO {
-    type Result = ();
-}
-
-impl Into<Binary> for IO {
-    fn into(self) -> Binary {
-        self.0.into()
-    }
-}
-
-impl AsRef<[u8]> for IO {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl From<Binary> for IO {
-    fn from(b: Binary) -> Self {
-        Self(b.as_ref().into())
-    }
-}
-
-impl From<String> for IO {
-    fn from(s: String) -> Self {
-        Self(s.into())
-    }
-}
-
-impl From<&str> for IO {
-    fn from(s: &str) -> Self {
-        Self(s.into())
-    }
-}
 
 struct Websocket {
     cons: Option<Addr<Terminal>>,
@@ -129,29 +88,29 @@ impl Actor for Websocket {
     }
 }
 
-impl Handler<IO> for Websocket {
+impl Handler<event::IO> for Websocket {
     type Result = ();
 
-    fn handle(&mut self, msg: IO, ctx: &mut <Self as Actor>::Context) {
+    fn handle(&mut self, msg: event::IO, ctx: &mut <Self as Actor>::Context) {
         trace!("Websocket <- Terminal : {:?}", msg);
         ctx.binary(msg);
     }
 }
 
-impl Handler<TerminadoMessage> for Websocket {
+impl Handler<event::TerminadoMessage> for Websocket {
     type Result = ();
 
-    fn handle(&mut self, msg: TerminadoMessage, ctx: &mut <Self as Actor>::Context) {
+    fn handle(&mut self, msg: event::TerminadoMessage, ctx: &mut <Self as Actor>::Context) {
         trace!("Websocket <- Terminal : {:?}", msg);
         match msg {
-            TerminadoMessage::Stdout(_) => {
+            event::TerminadoMessage::Stdout(_) => {
                 let json = serde_json::to_string(&msg);
 
                 if let Ok(json) = json {
                     ctx.text(json);
                 }
             }
-            _ => error!(r#"Invalid TerminadoMessage to Websocket: only "stdout" supported"#),
+            _ => error!(r#"Invalid event::TerminadoMessage to Websocket: only "stdout" supported"#),
         }
     }
 }
@@ -200,14 +159,14 @@ impl StreamHandler<ws::Message, ws::ProtocolError> for Websocket {
             ws::Message::Pong(_) => self.hb = Instant::now(),
             ws::Message::Text(t) => {
                 // Attempt to parse the message as JSON.
-                if let Ok(tmsg) = TerminadoMessage::from_json(&t) {
+                if let Ok(tmsg) = event::TerminadoMessage::from_json(&t) {
                     cons.do_send(tmsg);
                 } else {
                     // Otherwise, it's just byte data.
-                    cons.do_send(IO::from(t));
+                    cons.do_send(event::IO::from(t));
                 }
             }
-            ws::Message::Binary(b) => cons.do_send(IO::from(b)),
+            ws::Message::Binary(b) => cons.do_send(event::IO::from(b)),
             ws::Message::Close(_) => ctx.stop(),
         };
     }
@@ -231,7 +190,7 @@ impl Terminal {
 
 impl StreamHandler<<BytesCodec as Decoder>::Item, <BytesCodec as Decoder>::Error> for Terminal {
     fn handle(&mut self, msg: <BytesCodec as Decoder>::Item, _ctx: &mut Self::Context) {
-        self.ws.do_send(TerminadoMessage::Stdout(IO(msg)));
+        self.ws.do_send(event::TerminadoMessage::Stdout(event::IO(msg)));
     }
 }
 
@@ -296,10 +255,10 @@ impl Actor for Terminal {
     }
 }
 
-impl Handler<IO> for Terminal {
+impl Handler<event::IO> for Terminal {
     type Result = ();
 
-    fn handle(&mut self, msg: IO, ctx: &mut <Self as Actor>::Context) {
+    fn handle(&mut self, msg: event::IO, ctx: &mut <Self as Actor>::Context) {
         let pty = match self.pty_write {
             Some(ref mut p) => p,
             None => {
@@ -318,25 +277,10 @@ impl Handler<IO> for Terminal {
     }
 }
 
-struct Resize<T: PtyMaster> {
-    pty: T,
-    rows: c_ushort,
-    cols: c_ushort,
-}
-
-impl<T: PtyMaster> Future for Resize<T> {
-    type Item = ();
-    type Error = std::io::Error;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        self.pty.resize(self.rows, self.cols)
-    }
-}
-
-impl Handler<TerminadoMessage> for Terminal {
+impl Handler<event::TerminadoMessage> for Terminal {
     type Result = ();
 
-    fn handle(&mut self, msg: TerminadoMessage, ctx: &mut <Self as Actor>::Context) {
+    fn handle(&mut self, msg: event::TerminadoMessage, ctx: &mut <Self as Actor>::Context) {
         let pty = match self.pty_write {
             Some(ref mut p) => p,
             None => {
@@ -348,20 +292,20 @@ impl Handler<TerminadoMessage> for Terminal {
 
         trace!("Websocket -> Terminal : {:?}", msg);
         match msg {
-            TerminadoMessage::Stdin(io) => {
+            event::TerminadoMessage::Stdin(io) => {
                 if let Err(e) = pty.write(io.as_ref()) {
                     error!("Could not write to PTY: {}", e);
                     ctx.stop();
                 }
             }
-            TerminadoMessage::Resize { cols, rows } => {
+            event::TerminadoMessage::Resize { cols, rows } => {
                 info!("Resize: cols = {}, rows = {}", cols, rows);
-                if let Err(e) = (Resize { pty, cols, rows }).wait() {
+                if let Err(e) = event::Resize::new(pty, cols, rows).wait() {
                     error!("Resize failed: {}", e);
                     ctx.stop();
                 }
             }
-            TerminadoMessage::Stdout(_) => {
+            event::TerminadoMessage::Stdout(_) => {
                 error!("Invalid Terminado Message: Stdin cannot go to PTY")
             }
         };
