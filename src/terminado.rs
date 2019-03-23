@@ -25,7 +25,6 @@ impl TerminadoMessage {
     pub fn from_json(json: &str) -> Result<Self, ()> {
         let value: serde_json::Value = serde_json::from_str(json).map_err(|_| {
             error!("Invalid Terminado message: Invalid JSON");
-            ()
         })?;
 
         let list: &Vec<serde_json::Value> = value.as_array().ok_or_else(|| {
