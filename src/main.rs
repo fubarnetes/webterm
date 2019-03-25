@@ -59,7 +59,8 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 mod event;
 mod terminado;
 
-struct Websocket {
+/// Actix WebSocket actor
+pub struct Websocket {
     cons: Option<Addr<Terminal>>,
     hb: Instant,
 }
@@ -172,7 +173,8 @@ impl StreamHandler<ws::Message, ws::ProtocolError> for Websocket {
     }
 }
 
-struct Terminal {
+/// Represents a PTY backenActix WebSocket actor.d with attached child
+pub struct Terminal {
     pty_write: Option<AsyncPtyMasterWriteHalf>,
     child: Option<Child>,
     ws: Addr<Websocket>,
@@ -313,6 +315,20 @@ impl Handler<event::TerminadoMessage> for Terminal {
     }
 }
 
+/// Trait to extend an [actix_web::App] by serving a web terminal.
+pub trait WebTermExt {
+    /// Serve the websocket for the webterm
+    fn webterm_socket(self: Self) -> Self;
+}
+
+impl WebTermExt for App<()> {
+    fn webterm_socket(self: Self) -> Self {;
+        self.resource("/websocket", |r| {
+            r.f(|req| ws::start(req, Websocket::new()))
+        })
+    }
+}
+
 fn main() {
     pretty_env_logger::init();
 
@@ -324,9 +340,7 @@ fn main() {
                     .unwrap()
                     .show_files_listing(),
             )
-            .resource("/websocket", |r| {
-                r.f(|req| ws::start(req, Websocket::new()))
-            })
+            .webterm_socket()
             .resource("/", |r| r.f(index))
     })
     .bind("127.0.0.1:8080")
