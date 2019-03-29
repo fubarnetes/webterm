@@ -21,3 +21,11 @@ futures = "0.1.25"
 
 [patch.crates-io]
 tokio-pty-process = {path = "vendor/stund/tokio-pty-process"}
+
+[lib]
+name = "webterm"
+path = "src/lib.rs"
+
+[[bin]]
+name = "webterm-server"
+path = "src/server.rs"

@@ -42,7 +42,7 @@ extern crate log;
 extern crate pretty_env_logger;
 
 use actix::*;
-use actix_web::{fs::NamedFile, fs::StaticFiles, server, ws, App, HttpRequest, Result};
+use actix_web::{ws, App};
 
 use futures::prelude::*;
 
@@ -135,10 +135,6 @@ impl Websocket {
             ctx.ping("");
         });
     }
-}
-
-fn index(_req: &HttpRequest) -> Result<NamedFile> {
-    Ok(NamedFile::open("static/term.html")?)
 }
 
 impl StreamHandler<ws::Message, ws::ProtocolError> for Websocket {
@@ -301,7 +297,7 @@ impl Handler<event::TerminadoMessage> for Terminal {
                     ctx.stop();
                 }
             }
-            event::TerminadoMessage::Resize { cols, rows } => {
+            event::TerminadoMessage::Resize { rows, cols } => {
                 info!("Resize: cols = {}, rows = {}", cols, rows);
                 if let Err(e) = event::Resize::new(pty, cols, rows).wait() {
                     error!("Resize failed: {}", e);
@@ -325,23 +321,4 @@ impl WebTermExt for App<()> {
     fn webterm_socket(self: Self, endpoint: &str) -> Self {
         self.resource(endpoint, |r| r.f(|req| ws::start(req, Websocket::new())))
     }
-}
-
-fn main() {
-    pretty_env_logger::init();
-
-    server::new(|| {
-        App::new()
-            .handler(
-                "/static",
-                StaticFiles::new("node_modules")
-                    .unwrap()
-                    .show_files_listing(),
-            )
-            .webterm_socket("/websocket")
-            .resource("/", |r| r.f(index))
-    })
-    .bind("127.0.0.1:8080")
-    .unwrap()
-    .run();
 }
