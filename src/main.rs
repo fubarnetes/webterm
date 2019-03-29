@@ -318,14 +318,12 @@ impl Handler<event::TerminadoMessage> for Terminal {
 /// Trait to extend an [actix_web::App] by serving a web terminal.
 pub trait WebTermExt {
     /// Serve the websocket for the webterm
-    fn webterm_socket(self: Self) -> Self;
+    fn webterm_socket(self: Self, endpoint: &str) -> Self;
 }
 
 impl WebTermExt for App<()> {
-    fn webterm_socket(self: Self) -> Self {;
-        self.resource("/websocket", |r| {
-            r.f(|req| ws::start(req, Websocket::new()))
-        })
+    fn webterm_socket(self: Self, endpoint: &str) -> Self {
+        self.resource(endpoint, |r| r.f(|req| ws::start(req, Websocket::new())))
     }
 }
 
@@ -340,7 +338,7 @@ fn main() {
                     .unwrap()
                     .show_files_listing(),
             )
-            .webterm_socket()
+            .webterm_socket("/websocket")
             .resource("/", |r| r.f(index))
     })
     .bind("127.0.0.1:8080")
