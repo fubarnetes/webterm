@@ -6,18 +6,19 @@ edition = "2018"
 license = "BSD-3-Clause"
 
 [dependencies]
-actix= "0.7.9"
 actix-web= "0.7.19"
+actix= "0.7.9"
+askama = { version = "0.8.0", features= ["with-actix-web"] }
+futures = "0.1.25"
 libc = "0.2.51"
 log = "0.4.6"
 pretty_env_logger = "0.3.0"
 serde = "1.0.89"
 serde_json = "1.0.39"
 tokio = "0.1.18"
-tokio-pty-process = "*"
-tokio-io= "0.1.12"
 tokio-codec= "0.1.1"
-futures = "0.1.25"
+tokio-io= "0.1.12"
+tokio-pty-process = "*"
 
 [patch.crates-io]
 tokio-pty-process = {path = "vendor/stund/tokio-pty-process"}

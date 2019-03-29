@@ -29,6 +29,7 @@
 
 extern crate actix;
 extern crate actix_web;
+extern crate askama;
 extern crate futures;
 extern crate libc;
 extern crate serde;
@@ -40,6 +41,7 @@ extern crate tokio_pty_process;
 #[macro_use]
 extern crate log;
 extern crate pretty_env_logger;
+use askama::actix_web::TemplateIntoResponse;
 
 use actix::*;
 use actix_web::{ws, App};
@@ -57,6 +59,7 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 mod event;
+pub mod templates;
 mod terminado;
 
 /// Actix WebSocket actor
@@ -339,6 +342,13 @@ pub trait WebTermExt {
     fn webterm_socket<F>(self: Self, endpoint: &str, handler: F) -> Self
     where
         F: Fn(&actix_web::Request) -> Command + 'static;
+
+    fn webterm_ui(
+        self: Self,
+        endpoint: &str,
+        webterm_socket_endpoint: &str,
+        static_path: &str,
+    ) -> Self;
 }
 
 impl WebTermExt for App<()> {
@@ -348,6 +358,18 @@ impl WebTermExt for App<()> {
     {
         self.resource(endpoint, move |r| {
             r.f(move |req| ws::start(req, Websocket::new(handler(req))))
+        })
+    }
+
+    fn webterm_ui(
+        self: Self,
+        endpoint: &str,
+        webterm_socket_endpoint: &str,
+        static_path: &str,
+    ) -> Self {
+        let template = templates::WebTerm::new(webterm_socket_endpoint, static_path);
+        self.resource(endpoint, move |r| {
+            r.get().f(move |_| template.into_response())
         })
     }
 }

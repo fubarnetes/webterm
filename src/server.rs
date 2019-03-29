@@ -2,14 +2,10 @@ extern crate actix;
 extern crate actix_web;
 extern crate webterm;
 
-use actix_web::{fs::NamedFile, fs::StaticFiles, server, App, HttpRequest, Result};
+use actix_web::{fs::StaticFiles, server, App};
 use webterm::WebTermExt;
 
 use std::process::Command;
-
-fn index(_req: &HttpRequest) -> Result<NamedFile> {
-    Ok(NamedFile::open("static/term.html")?)
-}
 
 fn main() {
     pretty_env_logger::init();
@@ -27,7 +23,7 @@ fn main() {
                 cmd.env("TERM", "xterm");
                 cmd
             })
-            .resource("/", |r| r.f(index))
+            .webterm_ui("/", "/websocket", "/static")
     })
     .bind("127.0.0.1:8080")
     .unwrap()
