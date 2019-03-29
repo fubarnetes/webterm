@@ -299,7 +299,7 @@ impl Handler<event::TerminadoMessage> for Terminal {
             }
             event::TerminadoMessage::Resize { rows, cols } => {
                 info!("Resize: cols = {}, rows = {}", cols, rows);
-                if let Err(e) = event::Resize::new(pty, cols, rows).wait() {
+                if let Err(e) = event::Resize::new(pty, rows, cols).wait() {
                     error!("Resize failed: {}", e);
                     ctx.stop();
                 }
