@@ -1,0 +1,12 @@
+language: rust
+rust:
+- stable
+- nightly
+- beta
+matrix:
+  allow_failures:
+  - rust: stable
+  fast_finish: true
+cache: cargo
+before_install:
+- npm install
