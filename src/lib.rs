@@ -63,6 +63,7 @@ mod terminado;
 pub struct Websocket {
     cons: Option<Addr<Terminal>>,
     hb: Instant,
+    command: Option<Command>,
 }
 
 impl Actor for Websocket {
@@ -72,8 +73,13 @@ impl Actor for Websocket {
         // Start heartbeat
         self.hb(ctx);
 
+        let command = self
+            .command
+            .take()
+            .expect("command was None at start of WebSocket.");
+
         // Start PTY
-        self.cons = Some(Terminal::new(ctx.address()).start());
+        self.cons = Some(Terminal::new(ctx.address(), command).start());
 
         trace!("Started WebSocket");
     }
@@ -117,10 +123,11 @@ impl Handler<event::TerminadoMessage> for Websocket {
 }
 
 impl Websocket {
-    pub fn new() -> Self {
+    pub fn new(command: Command) -> Self {
         Self {
             hb: Instant::now(),
             cons: None,
+            command: Some(command),
         }
     }
 
@@ -184,14 +191,16 @@ pub struct Terminal {
     pty_write: Option<AsyncPtyMasterWriteHalf>,
     child: Option<Child>,
     ws: Addr<Websocket>,
+    command: Command,
 }
 
 impl Terminal {
-    pub fn new(ws: Addr<Websocket>) -> Self {
+    pub fn new(ws: Addr<Websocket>, command: Command) -> Self {
         Self {
             pty_write: None,
             child: None,
             ws,
+            command,
         }
     }
 }
@@ -217,7 +226,7 @@ impl Actor for Terminal {
             Ok(pty) => pty,
         };
 
-        let child = match Command::new("/bin/sh").spawn_pty_async(&pty) {
+        let child = match self.command.spawn_pty_async(&pty) {
             Err(e) => {
                 error!("Unable to spawn child: {:?}", e);
                 ctx.stop();
@@ -327,11 +336,18 @@ impl Handler<event::TerminadoMessage> for Terminal {
 /// Trait to extend an [actix_web::App] by serving a web terminal.
 pub trait WebTermExt {
     /// Serve the websocket for the webterm
-    fn webterm_socket(self: Self, endpoint: &str) -> Self;
+    fn webterm_socket<F>(self: Self, endpoint: &str, handler: F) -> Self
+    where
+        F: Fn(&actix_web::Request) -> Command + 'static;
 }
 
 impl WebTermExt for App<()> {
-    fn webterm_socket(self: Self, endpoint: &str) -> Self {
-        self.resource(endpoint, |r| r.f(|req| ws::start(req, Websocket::new())))
+    fn webterm_socket<F>(self: Self, endpoint: &str, handler: F) -> Self
+    where
+        F: Fn(&actix_web::Request) -> Command + 'static,
+    {
+        self.resource(endpoint, move |r| {
+            r.f(move |req| ws::start(req, Websocket::new(handler(req))))
+        })
     }
 }
