@@ -169,6 +169,16 @@ impl StreamHandler<ws::Message, ws::ProtocolError> for Websocket {
     }
 }
 
+impl Handler<event::ChildDied> for Websocket {
+    type Result = ();
+
+    fn handle(&mut self, _msg: event::ChildDied, ctx: &mut <Self as Actor>::Context) {
+        trace!("Websocket <- ChildDied");
+        ctx.close(None);
+        ctx.stop();
+    }
+}
+
 /// Represents a PTY backenActix WebSocket actor.d with attached child
 pub struct Terminal {
     pty_write: Option<AsyncPtyMasterWriteHalf>,
@@ -245,6 +255,9 @@ impl Actor for Terminal {
             },
             Err(e) => error!("Could not kill child with PID {}: {}", child.id(), e),
         };
+
+        // Notify the websocket that the child died.
+        self.ws.do_send(event::ChildDied());
 
         Running::Stop
     }

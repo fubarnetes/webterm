@@ -40,6 +40,12 @@ SPDX-License-Identifier: BSD-3-Clause
 				term.fit();
 			});
 
+			sock.addEventListener('close', function() {
+				term.writeln("");
+				term.writeln("Connection closed.");
+				term.terminadoDetach(sock);
+			});
+
 			term.open(document.getElementById('terminal'));
 			window.onresize = function() {term.fit();};
 		</script>

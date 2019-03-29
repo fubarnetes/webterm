@@ -66,3 +66,9 @@ impl From<&str> for IO {
         Self(s.into())
     }
 }
+
+pub struct ChildDied();
+
+impl Message for ChildDied {
+    type Result = ();
+}
