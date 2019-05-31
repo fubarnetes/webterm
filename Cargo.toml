@@ -10,7 +10,7 @@ actix-web= "0.7.19"
 actix= "0.7.9"
 askama = { version = "0.8.0", features= ["with-actix-web"] }
 futures = "0.1.27"
-libc = "0.2.55"
+libc = "0.2.56"
 log = "0.4.6"
 pretty_env_logger = "0.3.0"
 serde = "1.0.91"
