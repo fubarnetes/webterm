@@ -1,5 +1,5 @@
 {
   "dependencies": {
-    "xterm": "^3.13.2"
+    "xterm": "^3.14.0"
   }
 }
