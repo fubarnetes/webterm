@@ -18,3 +18,7 @@ The frontend is a static HTML page served by [actix-web][Actix] providing an [xt
 [Terminado]: https://github.com/jupyter/terminado
 [tokio-pty-process]: https://crates.io/crates/tokio-pty-process
 [xterm.js]: https://xtermjs.org/
+
+# Should I run this on the internet?
+
+Probably not. It let's anyone who can access the webpage control your system.
