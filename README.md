@@ -21,4 +21,4 @@ The frontend is a static HTML page served by [actix-web][Actix] providing an [xt
 
 # Should I run this on the internet?
 
-Probably not. It let's anyone who can access the webpage control your system.
+Probably not. It lets anyone who can access the webpage control your system.
