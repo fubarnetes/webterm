@@ -7,7 +7,7 @@ license = "BSD-3-Clause"
 
 [dependencies]
 actix-web= "0.7.19"
-actix= "0.7.9"
+actix= "0.8.1"
 askama = { version = "0.8.0", features= ["with-actix-web"] }
 futures = "0.1.27"
 libc = "0.2.58"
