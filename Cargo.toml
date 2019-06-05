@@ -1,9 +1,19 @@
 [package]
 name = "webterm"
+description = "xterm.js - based webterminal"
+repository = "https://github.com/fubarnetes/webterm"
+documentation = "https://docs.rs/webterm"
+readme = "README.md"
+categories = ["web-programming", "web-programming::websocket", "web-programming::http-server", "command-line-utilities"]
+keywords = ["terminal", "xterm", "websocket", "terminus", "console"]
 version = "0.1.0"
 authors = ["fabian.freyer@physik.tu-berlin.de"]
 edition = "2018"
 license = "BSD-3-Clause"
+
+[badges]
+travis-ci = { repository = "fubarnetes/webterm", branch = "master" }
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 actix-web= "0.7.19"
