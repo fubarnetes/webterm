@@ -16,7 +16,7 @@ travis-ci = { repository = "fubarnetes/webterm", branch = "master" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-actix-web= "0.7.19"
+actix-web= "1.0.2"
 actix= "0.7.9"
 askama = { version = "0.8.0", features= ["with-actix-web"] }
 futures = "0.1.27"
