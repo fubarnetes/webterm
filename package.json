@@ -1,5 +1,19 @@
 {
   "dependencies": {
     "xterm": "^3.14.4"
+  },
+  "devDependencies": {
+    "jest": "^24.8.0",
+    "jest-puppeteer": "^4.2.0",
+    "puppeteer": "^1.18.1"
+  },
+  "jest": {
+    "preset": "jest-puppeteer",
+    "roots": [
+      "tests/"
+    ]
+  },
+  "scripts": {
+    "test": "jest"
   }
 }

@@ -10,3 +10,7 @@ matrix:
 cache: cargo
 before_install:
 - npm install
+script: |
+  cargo build --verbose
+  cargo test
+  npm test
