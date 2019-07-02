@@ -1,4 +1,5 @@
 const child_process = require('child_process');
+const os = require('os');
 
 describe('Basic tests', () => {
     let server_process;
@@ -77,10 +78,17 @@ describe('Basic tests', () => {
 
     it('sends resize events', async () => {
         await page.goto('http://localhost:8080');
-        await page.evaluate(() => {
-            sock.send('trap \'stty size\' SIGWINCH\n');
+        await page.evaluate(async (sigwinch) => {
+            function sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+            await sleep(50);
+            sock.send(`trap 'stty size' ${sigwinch}\n`);
+        }, os.constants.signals.SIGWINCH);
+        await page.setViewport({
+            width: 400,
+            height: 600
         });
-        await page.setViewport({width: 400, height: 600});
         let content = await page.evaluate(async () => {
             function sleep(ms) {
                 return new Promise(resolve => setTimeout(resolve, ms));
