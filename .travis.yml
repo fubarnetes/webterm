@@ -3,6 +3,8 @@ rust:
 - stable
 - nightly
 - beta
+node_js:
+- "10"
 matrix:
   allow_failures:
   - rust: stable
