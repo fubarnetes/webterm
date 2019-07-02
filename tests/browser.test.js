@@ -6,7 +6,7 @@ describe('Basic tests', () => {
     beforeAll(() => {
         const searchTerm = "Starting server";
         let stderr = "";
-        server_process = child_process.exec('target/debug/webterm-server', {
+        server_process = child_process.exec('target/debug/webterm-server --command /bin/bash', {
             "env": {
                 "RUST_LOG": "actix_net::server::server=info"
             }
@@ -82,7 +82,7 @@ describe('Basic tests', () => {
             function sleep(ms) {
                 return new Promise(resolve => setTimeout(resolve, ms));
             }
-            await sleep(50);
+            await sleep(100);
             sock.send(`trap 'stty size' ${sigwinch}\n`);
         }, os.constants.signals.SIGWINCH);
         await page.setViewport({
@@ -93,7 +93,7 @@ describe('Basic tests', () => {
             function sleep(ms) {
                 return new Promise(resolve => setTimeout(resolve, ms));
             }
-            await sleep(50);
+            await sleep(100);
             term.selectAll();
             return term.getSelection();
         });
@@ -104,7 +104,7 @@ describe('Basic tests', () => {
             }
         });
         expect(content).toContain(`${viewport.rows} ${viewport.cols}`);
-    })
+    });
 
     afterAll(async () => {
         return new Promise((resolve, reject) => {
