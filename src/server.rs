@@ -1,7 +1,3 @@
-extern crate actix;
-extern crate actix_web;
-extern crate structopt;
-extern crate webterm;
 #[macro_use]
 extern crate lazy_static;
 

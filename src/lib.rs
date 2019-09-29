@@ -27,21 +27,10 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-extern crate actix;
-extern crate actix_web;
-extern crate futures;
-extern crate handlebars;
-extern crate libc;
-extern crate serde;
 #[macro_use]
 extern crate serde_json;
-extern crate tokio;
-extern crate tokio_codec;
-extern crate tokio_io;
-extern crate tokio_pty_process;
 #[macro_use]
 extern crate log;
-extern crate pretty_env_logger;
 
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};
