@@ -1,11 +1,11 @@
 extern crate actix;
 extern crate actix_web;
-extern crate webterm;
 extern crate structopt;
+extern crate webterm;
 #[macro_use]
 extern crate lazy_static;
 
-use actix_web::{fs::StaticFiles, server, App};
+use actix_web::{App, HttpServer};
 use structopt::StructOpt;
 use webterm::WebTermExt;
 
@@ -31,18 +31,12 @@ lazy_static! {
     static ref OPT: Opt = Opt::from_args();
 }
 
-
 fn main() {
     pretty_env_logger::init();
 
-    server::new(|| {
+    HttpServer::new(|| {
         App::new()
-            .handler(
-                "/static",
-                StaticFiles::new("node_modules")
-                    .unwrap()
-                    .show_files_listing(),
-            )
+            .service(actix_files::Files::new("/static", "./node_modules"))
             .webterm_socket("/websocket", |_req| {
                 let mut cmd = Command::new(OPT.command.clone());
                 cmd.env("TERM", "xterm");
@@ -52,5 +46,6 @@ fn main() {
     })
     .bind(format!("{}:{}", OPT.host, OPT.port))
     .unwrap()
-    .run();
+    .run()
+    .unwrap();
 }

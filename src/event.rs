@@ -1,5 +1,4 @@
 use actix::Message;
-use actix_web::Binary;
 use futures::{Future, Poll};
 use libc::c_ushort;
 use tokio_pty_process::PtyMaster;
@@ -37,8 +36,8 @@ impl Message for IO {
     type Result = ();
 }
 
-impl Into<Binary> for IO {
-    fn into(self) -> Binary {
+impl Into<actix_web::web::Bytes> for IO {
+    fn into(self) -> actix_web::web::Bytes {
         self.0.into()
     }
 }
@@ -49,8 +48,8 @@ impl AsRef<[u8]> for IO {
     }
 }
 
-impl From<Binary> for IO {
-    fn from(b: Binary) -> Self {
+impl From<actix_web::web::Bytes> for IO {
+    fn from(b: actix_web::web::Bytes) -> Self {
         Self(b.as_ref().into())
     }
 }

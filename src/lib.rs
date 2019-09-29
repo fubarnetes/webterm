@@ -29,10 +29,11 @@
 
 extern crate actix;
 extern crate actix_web;
-extern crate askama;
 extern crate futures;
+extern crate handlebars;
 extern crate libc;
 extern crate serde;
+#[macro_use]
 extern crate serde_json;
 extern crate tokio;
 extern crate tokio_codec;
@@ -41,12 +42,11 @@ extern crate tokio_pty_process;
 #[macro_use]
 extern crate log;
 extern crate pretty_env_logger;
-use askama::actix_web::TemplateIntoResponse;
 
-use actix::*;
-use actix_web::{ws, App};
-
-use futures::prelude::*;
+use actix::prelude::*;
+use actix::{Actor, StreamHandler};
+use actix_web::{web, App, HttpRequest, HttpResponse};
+use actix_web_actors::ws;
 
 use std::io::Write;
 use std::process::Command;
@@ -55,11 +55,12 @@ use std::time::{Duration, Instant};
 use tokio_codec::{BytesCodec, Decoder, FramedRead};
 use tokio_pty_process::{AsyncPtyMaster, AsyncPtyMasterWriteHalf, Child, CommandExt};
 
+use handlebars::Handlebars;
+
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 mod event;
-pub mod templates;
 mod terminado;
 
 /// Actix WebSocket actor
@@ -175,6 +176,7 @@ impl StreamHandler<ws::Message, ws::ProtocolError> for Websocket {
             }
             ws::Message::Binary(b) => cons.do_send(event::IO::from(b)),
             ws::Message::Close(_) => ctx.stop(),
+            ws::Message::Nop => {}
         };
     }
 }
@@ -341,7 +343,7 @@ pub trait WebTermExt {
     /// Serve the websocket for the webterm
     fn webterm_socket<F>(self: Self, endpoint: &str, handler: F) -> Self
     where
-        F: Fn(&actix_web::Request) -> Command + 'static;
+        F: Clone + Fn(&actix_web::HttpRequest) -> Command + 'static;
 
     fn webterm_ui(
         self: Self,
@@ -351,14 +353,27 @@ pub trait WebTermExt {
     ) -> Self;
 }
 
-impl WebTermExt for App<()> {
+impl<T, B> WebTermExt for App<T, B>
+where
+    B: actix_web::body::MessageBody,
+    T: actix_service::NewService<
+        Config = (),
+        Request = actix_web::dev::ServiceRequest,
+        Response = actix_web::dev::ServiceResponse<B>,
+        Error = actix_web::Error,
+        InitError = (),
+    >,
+{
     fn webterm_socket<F>(self: Self, endpoint: &str, handler: F) -> Self
     where
-        F: Fn(&actix_web::Request) -> Command + 'static,
+        F: Clone + Fn(&actix_web::HttpRequest) -> Command + 'static,
     {
-        self.resource(endpoint, move |r| {
-            r.f(move |req| ws::start(req, Websocket::new(handler(req))))
-        })
+        self.route(
+            endpoint,
+            web::get().to(move |req: HttpRequest, stream: web::Payload| {
+                ws::start(Websocket::new(handler(&req)), &req, stream)
+            }),
+        )
     }
 
     fn webterm_ui(
@@ -367,9 +382,23 @@ impl WebTermExt for App<()> {
         webterm_socket_endpoint: &str,
         static_path: &str,
     ) -> Self {
-        let template = templates::WebTerm::new(webterm_socket_endpoint, static_path);
-        self.resource(endpoint, move |r| {
-            r.get().f(move |_| template.into_response())
-        })
+        let mut handlebars = Handlebars::new();
+        handlebars
+            .register_templates_directory(".html", "./templates")
+            .unwrap();
+        let handlebars_ref = web::Data::new(handlebars);
+        let static_path = static_path.to_owned();
+        let webterm_socket_endpoint = webterm_socket_endpoint.to_owned();
+        self.register_data(handlebars_ref.clone()).route(
+            endpoint,
+            web::get().to(move |hb: web::Data<Handlebars>| {
+                let data = json!({
+                "websocket_path": webterm_socket_endpoint,
+                "static_path": static_path,
+                });
+                let body = hb.render("term", &data).unwrap();
+                HttpResponse::Ok().body(body)
+            }),
+        )
     }
 }
