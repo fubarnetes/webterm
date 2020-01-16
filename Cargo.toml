@@ -17,7 +17,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 actix-files = "0.1.6"
-actix-service = "0.4.2"
+actix-service = "1.0.4"
 actix-web-actors = "1.0.2"
 actix-web= "1.0.8"
 actix= "0.8.3"
