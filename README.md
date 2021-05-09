@@ -19,6 +19,13 @@ The frontend is a static HTML page served by [actix-web][Actix] providing an [xt
 [tokio-pty-process]: https://crates.io/crates/tokio-pty-process
 [xterm.js]: https://xtermjs.org/
 
+# Local development
+```
+cargo build
+cargo run
+```
+Then head to `http://localhost:8080/` to see it in action!
+
 # Should I run this on the internet?
 
 Probably not. It lets anyone who can access the webpage control your system.
